@@ -6,11 +6,13 @@ import hashlib
 
 
 def arg_parse():
-    """ Parser for command-line editon
+    """ Parser for command-line edition
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("SRC_FILE")
+    parser.add_argument("SRC_FILE", nargs='+')
     parser.add_argument("DESTINATION")
+    parser.add_argument("-r", action="store_true")
+    parser.add_argument('-u', action="store_true")
     return parser.parse_args()
     
 
@@ -193,22 +195,68 @@ def update_file(src, dest, chunk_size=1024):
     change_same_time(src, dest)
 
 
+def copy_dir(src, dest):
+    """ Should do recursive for all dirs and files inside it
+    """
+    if not os.path.isdir(dest):
+        print("ERROR: destination must be a directory when copying more than 1 file")
+    else:
+        try:
+            new_dest_path = os.path.join(dest, os.path.basename(src))
+            os.mkdir(new_dest_path)
+        except FileExistsError:
+            pass
+        for file in os.listdir(src):
+            file = os.path.join(src, file)
+            if os.path.isdir(file):
+                copy_dir(file, new_dest_path)
+            else:
+                copy_file(file, new_dest_path)
+
+
+def update_dir(src, dest):
+    """ Should do recursive for all dirs and files inside it
+    Instead of making a copy of source file, it considers to update the file
+    """
+    if not os.path.isdir(dest):
+        print("ERROR: destination must be a directory when updating more than 1 file")
+    else:
+        source_files = os.listdir(src)
+        dest_files = os.listdir(dest)
+        for dest_file in dest_files:
+            if dest_file in source_files:
+                src_file = os.path.join(src, dest_file)
+                dest_file = os.path.join(dest, dest_file)
+                if os.path.isdir(src_file) and os.path.isdir(dest_file):
+                    update_dir(src_file, dest_file)
+                elif os.path.isfile(src_file) and os.path.isfile(dest_file):
+                    update_file(src_file, dest_file)
+
 def main():
     """ Main function
     """
     # Create arguments from argument parser
     args = arg_parse()
+    print(args)
     # Get source path and destination path
-    src_path = os.path.abspath(args.SRC_FILE)
     dest_path = os.path.abspath(args.DESTINATION)
-    # Case processing
-    if is_exist(src_path):
-        if os.path.islink(src_path):
-            make_symlink(src_path, dest_path)
-        elif os.path.exists(dest_path):
-            update_file(src_path, dest_path)
-        else:
-            copy_file(src_path, dest_path)
+    for src_path in args.SRC_FILE:
+        src_path = os.path.abspath(src_path)
+        # Case processing
+        if is_exist(src_path):
+            if os.path.islink(src_path):
+                make_symlink(src_path, dest_path)
+            elif os.path.exists(dest_path) and os.path.isfile(dest_path):
+                update_file(src_path, dest_path)
+            elif os.path.isdir(src_path) and args.r:
+                copy_dir(src_path, dest_path)
+            elif os.path.isdir(src_path) and args.u:
+                update_dir(src_path, dest_path)
+            elif os.path.isdir(src_path):
+                print("skipping directory "+os.path.basename(src_path))
+                continue
+            else:
+                copy_file(src_path, dest_path)
 
 
 if __name__ == "__main__":
